@@ -1,43 +1,129 @@
 from functools import reduce
 from collections import defaultdict
-import difflib
-import pprint
-'''
-puzzle = [[8, 0, 0, 0, 0, 0, 3, 9, 7],
-          [0, 0, 0, 0, 0, 7, 6, 0, 0],
-          [0, 7, 0, 8, 0, 0, 0, 0, 4],
-          [0, 0, 0, 6, 5, 2, 1, 0, 0],
-          [0, 2, 6, 0, 3, 1, 0, 0, 8],
-          [0, 1, 5, 9, 0, 0, 0, 2, 0],
-          [1, 9, 7, 2, 8, 0, 4, 6, 0],
-          [0, 0, 0, 4, 0, 0, 9, 7, 0],
-          [2, 0, 0, 3, 0, 0, 8, 1, 0]
-          ]
+import argparse
+import json
+import os
 
-puzzle = [[5, 9, 7, 0, 4, 0, 0, 3, 0],
-          [3, 4, 8, 0, 0, 0, 0, 6, 0],
-          [6, 1, 2, 0, 9, 0, 0, 8, 4],
-          [7, 5, 0, 0, 0, 0, 4, 9, 0],
-          [8, 0, 9, 0, 0, 0, 0, 7, 0],
-          [4, 0, 0, 6, 0, 0, 0, 5, 0],
-          [1, 7, 0, 0, 2, 0, 6, 4, 0],
-          [9, 6, 0, 0, 8, 3, 0, 2, 0],
-          [2, 8, 0, 0, 0, 0, 0, 1, 0]
-         ]
+# Default puzzle (used when no input is provided)
+DEFAULT_PUZZLE = [
+    [0, 0, 3, 0, 0, 0, 0, 0, 1],
+    [0, 9, 0, 0, 3, 5, 2, 6, 8],
+    [0, 0, 0, 0, 0, 0, 0, 0, 0],
+    [0, 7, 0, 0, 0, 0, 1, 8, 6],
+    [1, 3, 0, 8, 6, 0, 7, 2, 5],
+    [2, 8, 6, 0, 0, 0, 9, 4, 3],
+    [0, 4, 1, 0, 8, 0, 3, 0, 0],
+    [0, 5, 0, 2, 0, 6, 0, 1, 0],
+    [0, 0, 0, 0, 0, 3, 0, 7, 0]
+]
 
-'''
-puzzle = [[0,0,3,0,0,0,0,0,1],
-          [0,9,0,0,3,5,2,6,8],
-          [0,0,0,0,0,0,0,0,0],
-          [0,7,0,0,0,0,1,8,6],
-          [1,3,0,8,6,0,7,2,5],
-          [2,8,6,0,0,0,9,4,3],
-          [0,4,1,0,8,0,3,0,0],
-          [0,5,0,2,0,6,0,1,0],
-          [0,0,0,0,0,3,0,7,0]
-         ]
+puzzle = [row[:] for row in DEFAULT_PUZZLE]
 
-#markUpDict = defaultdict(list)
+
+# ============================================================================
+# INPUT METHODS
+# ============================================================================
+
+def load_from_file(filepath):
+    """
+    Load a puzzle from a text or JSON file.
+    
+    Text format (9 lines, 9 digits each, 0 = empty):
+        003000001
+        090035268
+        ...
+    
+    JSON format:
+        {"puzzle": [[0,0,3,...], ...]}
+        or just: [[0,0,3,...], ...]
+    """
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"File not found: {filepath}")
+    
+    with open(filepath, 'r') as f:
+        content = f.read().strip()
+    
+    # Try JSON first
+    if filepath.endswith('.json'):
+        data = json.loads(content)
+        if isinstance(data, dict) and 'puzzle' in data:
+            return data['puzzle']
+        elif isinstance(data, list):
+            return data
+        else:
+            raise ValueError("Invalid JSON format. Expected a 2D array or {'puzzle': [...]}")
+    
+    # Parse as text file
+    lines = content.split('\n')
+    grid = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        # Handle space-separated or continuous digits
+        if ' ' in line or ',' in line:
+            row = [int(x) for x in line.replace(',', ' ').split()]
+        else:
+            row = [int(c) for c in line if c.isdigit()]
+        if len(row) == 9:
+            grid.append(row)
+    
+    if len(grid) != 9:
+        raise ValueError(f"Invalid puzzle format. Expected 9 rows, got {len(grid)}")
+    
+    return grid
+
+
+def interactive_input():
+    """
+    Interactively prompt the user to enter a puzzle row by row.
+    """
+    print("\n🧩 Enter your Sudoku puzzle")
+    print("   Use 0 for empty cells")
+    print("   Enter 9 digits per row (spaces optional)\n")
+    
+    grid = []
+    for i in range(9):
+        while True:
+            try:
+                line = input(f"   Row {i + 1}: ").strip()
+                # Handle space-separated or continuous digits
+                if ' ' in line or ',' in line:
+                    row = [int(x) for x in line.replace(',', ' ').split()]
+                else:
+                    row = [int(c) for c in line if c.isdigit()]
+                
+                if len(row) != 9:
+                    print(f"   ⚠️  Please enter exactly 9 digits (got {len(row)})")
+                    continue
+                if not all(0 <= x <= 9 for x in row):
+                    print("   ⚠️  Digits must be between 0-9")
+                    continue
+                grid.append(row)
+                break
+            except ValueError:
+                print("   ⚠️  Invalid input. Use digits 0-9 only.")
+    
+    print("\n   ✅ Puzzle loaded successfully!\n")
+    return grid
+
+
+def print_puzzle(grid, title="Puzzle"):
+    """Pretty print the puzzle grid."""
+    print(f"\n   {title}:")
+    print("   ┌───────┬───────┬───────┐")
+    for i, row in enumerate(grid):
+        if i > 0 and i % 3 == 0:
+            print("   ├───────┼───────┼───────┤")
+        row_str = "   │"
+        for j, val in enumerate(row):
+            if j > 0 and j % 3 == 0:
+                row_str += " │"
+            display = str(val) if val != 0 else "·"
+            row_str += f" {display}"
+        row_str += " │"
+        print(row_str)
+    print("   └───────┴───────┴───────┘\n")
 
 def checkInRow(row, value):
     if value in row:
@@ -73,11 +159,11 @@ def getBox(ip, i, j):
     return box
 
 def findMarkupCells():
+    """Find all possible candidates for each empty cell."""
     markupDict = defaultdict(list)
     ret = [False, False, False]
     for row in range(9):
         for col in range(9):
-            print("-----------------------",row, col, puzzle[row][col])
             if puzzle[row][col] == 0:
                 currentCol = getCol(puzzle, col)
                 box = getBox(puzzle, row, col)
@@ -194,21 +280,6 @@ def findNakedPair(markUpDict):
                             markUpDict = update_puzzle_from_markup(markUpDict)
                             nakedPair.clear()
                             break
-    print(markUpDict)
-    #print(puzzle)
-    '''
-    for i in range(0, 9):
-        for j in range(0, 9):
-            print(puzzle[i][j], end = " ")
-        print()
-    exit(0)
-    for key in list(nakedPair):
-        if len(key) != len(nakedPair[key]):
-            #print("-----", key ,nakedPair[key])
-            nakedPair.pop(key, None)
-            #del nakedSingle[key]
-    #print(nakedPair)
-    '''
     #return markUpDict
 '''
 def occupancyTheorem(markupDict, nakedPair):
@@ -227,8 +298,7 @@ def occupancyTheorem(markupDict, nakedPair):
 '''
 
 def boxList(pos):
-    print(pos)
-    print(type(pos))
+    """Get all positions in the 3x3 box containing the given position."""
     rowSet = int(pos[0] / 3)
     columnSet = int(pos[1] / 3)
     tempList = []
@@ -242,8 +312,8 @@ def occupancy_update(markUpDict, preemptiveDict):
     rowSelect = 0
     columnSelect = 0
     if len(preemptiveDict) == 0:
-        print("no new preemptive set found")
-        #call for assumption
+        # No new preemptive set found
+        pass
     else:
         #print(preemptiveDict)
         preemptiveMarkUpList = list(preemptiveDict.keys())
@@ -272,7 +342,6 @@ def occupancy_update(markUpDict, preemptiveDict):
         genMarkUpList = []    #list of positions whose values are to be updated eliminating preemption
         if rowSelect == 1:
             row = preemptivePositionsTuplesList[0][0]
-            print("row :",row)
             for i in range(0, 9):
                 if puzzle[row][i] == 0 and (row,i) not in preemptivePositionsTuplesList:
                     genMarkUpList.append((row, i))
@@ -295,10 +364,8 @@ def occupancy_update(markUpDict, preemptiveDict):
             tempList1 = boxList(preemptiveDict[preemptiveMarkUpList[0]][0])
             tempList2 = boxList(preemptiveDict[preemptiveMarkUpList[0]][1])
             if tempList1 == tempList2:
-                print("box satisfying ", tempList1)
                 for i in tempList1:
                     if (i[0],i[1]) in list(markUpDict.keys()) and i not in preemptivePositionsTuplesList and i not in genMarkUpList:
-                        print("tuple extra added since it is present in box :", (i[0], i[1]))
                         genMarkUpList.append(i)
         #when peemptive triplet :
         elif len(preemptiveDict[preemptiveMarkUpList[0]]) == 3:
@@ -306,10 +373,8 @@ def occupancy_update(markUpDict, preemptiveDict):
             tempList2 = boxList(preemptiveDict[preemptiveMarkUpList[0]][1])
             tempList3 = boxList(preemptiveDict[preemptiveMarkUpList[0]][2])
             if tempList1 == tempList2 and tempList1 == tempList3:
-                print("box satisfying ", tempList1)
                 for i in tempList1:
                     if (i[0],i[1]) in list(markUpDict.keys()) and i not in preemptivePositionsTuplesList and i not in genMarkUpList:
-                        print("tuple extra added since it is present in box :", (i[0], i[1]))
                         genMarkUpList.append(i)
         #when preemptive quad :
         elif len(preemptiveDict[preemptiveMarkUpList[0]]) == 4:
@@ -318,10 +383,8 @@ def occupancy_update(markUpDict, preemptiveDict):
             tempList3 = boxList(preemptiveDict[preemptiveMarkUpList[0]][2])
             tempList4 = boxList(preemptiveDict[preemptiveMarkUpList[0]][3])
             if tempList1 == tempList2 and tempList1 == tempList3 and tempList3 == tempList4:
-                print("box satisfying ", tempList1)
                 for i in tempList1:
                     if (i[0],i[1]) in list(markUpDict.keys()) and i not in preemptivePositionsTuplesList and i not in genMarkUpList:
-                        print("tuple extra added since it is present in box :", (i[0], i[1]))
                         genMarkUpList.append(i)
 
         #updating the markups
@@ -343,93 +406,115 @@ def update_puzzle_from_markup(markUpDict):
             tempmarkUpDict = findMarkupCells()
             markUpDict = tempmarkUpDict.copy()
     return markUpDict
-def compare_dicts(d1, d2):
-    print("here111111111")
-    return ('\n' + '\n'.join(difflib.ndiff(
-                   pprint.pformat(d1).splitlines(),
-                   pprint.pformat(d2).splitlines())))
-if __name__ == "__main__":
-    #Finding markup cells
+def solve_puzzle(verbose=False):
+    """
+    Main solving function that applies all techniques.
+    Returns True if puzzle is solved, False otherwise.
+    """
+    global puzzle
+    
+    # Finding markup cells
     markUpDict = findMarkupCells()
-    #Update the markup cell which contain single value
+    
+    # Update cells with single candidates (naked singles)
     for key in markUpDict:
         if len(markUpDict[key]) == 1:
             i, j = key[0], key[1]
             puzzle[i][j] = markUpDict[key][0]
             markUpDict = findMarkupCells()
-
-    #print("Markup Dict :",markUpDict)
-    ##nakedPairDict = findNakedPair(markUpDict)
-    #print("Naked Pair : ",nakedPairDict)
-    print(markUpDict)
-    dupMarkupDict = defaultdict(list)
-    dupMarkupDict = markUpDict.copy()
-    count = 0
-    findNakedPair(markUpDict)
-    findNakedPair(markUpDict)
-    findNakedPair(markUpDict)
-    findNakedPair(markUpDict)
-    findNakedPair(markUpDict)
-    '''
-    while True:
-        returnBoolList = [False] * 9
-        for i in range(9):
-            if 0 in puzzle[i]:
-                returnBoolList[0] = True
-        for i in range(0, 9):
-            for j in range(0, 9):
-                print(puzzle[i][j], end = " ")
-            print()
-        if True in returnBoolList:
-            findNakedPair(markUpDict)
-        else:
-            break
-    '''
-    #findNakedPair(markUpDict)
-
-    #print(puzzle)
-    for i in range(0, 9):
-        for j in range(0, 9):
-            print(puzzle[i][j], end = " ")
-        print()
-    print(markUpDict)
-    exit(0)
-    while True:
+    
+    # Apply naked pair technique multiple times
+    for _ in range(5):
         findNakedPair(markUpDict)
-        print("markupDict:    ",markUpDict)
-        print("dupMarkupDict :", dupMarkupDict)
-        compare_dicts(markUpDict, dupMarkupDict)
-        if markUpDict == dupMarkupDict:
-            break
-        dupMarkupDict = markUpDict.copy()
-        count += 1
+    
+    # Check if solved
+    solved = all(puzzle[i][j] != 0 for i in range(9) for j in range(9))
+    return solved
 
 
-    '''
-        print("1st time naked pair : ", tempNakedPairDict)
-        print("1st time passnaked ::", passNakedPairDict)
-        if passNakedPairDict == tempNakedPairDict:
-            break
-        passNakedPairDict = tempNakedPairDict.copy()
-        #print("hello", passNakedPairDict)
-        for i in tempNakedPairDict.keys():
-            tempDict = {}
-            tempDict[i] = tempNakedPairDict[i]
-            print(tempDict)
-            occupancy_update(markUpDict, tempDict)
-        count += 1
-        #code to update puzzle
-        update_puzzle_from_markup(markUpDict)
-        '''
-    print("count ::",count)
+def main():
+    """Main entry point with CLI argument parsing."""
+    global puzzle
+    
+    parser = argparse.ArgumentParser(
+        description="🧩 Sudoku Solver - Solve puzzles using human-like techniques",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python sudoku_solver.py                      # Use default puzzle
+  python sudoku_solver.py -i                   # Interactive input
+  python sudoku_solver.py puzzle.txt           # Load from text file
+  python sudoku_solver.py puzzle.json          # Load from JSON file
+
+File formats:
+  Text file (9 lines, 9 digits each, 0 = empty):
+    003000001
+    090035268
+    ...
+
+  JSON file:
+    {"puzzle": [[0,0,3,...], ...]}
+    or: [[0,0,3,...], ...]
+        """
+    )
+    
+    parser.add_argument(
+        'file',
+        nargs='?',
+        help='Path to puzzle file (text or JSON format)'
+    )
+    parser.add_argument(
+        '-i', '--interactive',
+        action='store_true',
+        help='Enter puzzle interactively'
+    )
+    parser.add_argument(
+        '-v', '--verbose',
+        action='store_true',
+        help='Show detailed solving steps'
+    )
+    
+    args = parser.parse_args()
+    
+    # Determine input method
+    try:
+        if args.interactive:
+            puzzle = interactive_input()
+        elif args.file:
+            print(f"\n   📂 Loading puzzle from: {args.file}")
+            puzzle = load_from_file(args.file)
+            print("   ✅ Puzzle loaded successfully!\n")
+        else:
+            print("\n   ℹ️  No input provided. Using default puzzle.")
+            print("   💡 Tip: Use -i for interactive mode or provide a file path.\n")
+            puzzle = [row[:] for row in DEFAULT_PUZZLE]
+    except FileNotFoundError as e:
+        print(f"\n   ❌ Error: {e}")
+        return 1
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"\n   ❌ Error parsing puzzle: {e}")
+        return 1
+    
+    # Show input puzzle
+    print_puzzle(puzzle, "Input Puzzle")
+    
+    # Solve
+    print("   🔄 Solving...\n")
+    solved = solve_puzzle(verbose=args.verbose)
+    
+    # Show result
+    if solved:
+        print_puzzle(puzzle, "✅ Solved Puzzle")
+    else:
+        print_puzzle(puzzle, "⏳ Partial Solution")
+        print("   ⚠️  Could not fully solve with current techniques.")
+        print("   💡 This puzzle may require backtracking (not yet implemented).\n")
+    
+    return 0
 
 
-    #print(puzzle)
-    for i in range(0, 9):
-        for j in range(0, 9):
-            print(puzzle[i][j], end = " ")
-        print()
-    print(markUpDict)
+if __name__ == "__main__":
+    exit(main())
 
 
 
