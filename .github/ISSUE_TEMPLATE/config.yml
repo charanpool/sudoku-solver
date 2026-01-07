@@ -1,0 +1,9 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Questions & Discussions
+    url: https://github.com/YOUR_USERNAME/sudoku-solver/discussions
+    about: Ask questions and discuss ideas here
+  - name: 📚 Documentation
+    url: https://github.com/YOUR_USERNAME/sudoku-solver#readme
+    about: Check out the README for usage instructions
+
